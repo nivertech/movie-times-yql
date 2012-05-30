@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<table xmlns="http://query.yahooapis.com/v1/schema/table.xsd">
+  <meta>
+    <author>Peter Reinhardt</author>
+    <sampleQuery>select * from pterodactyl.movietimes where zipcode="02142"</sampleQuery>
+  </meta>
+  <bindings>
+    <select itemPath="" produces="XML">
+      <urls>
+        <url>http://www.fandango.com/{zipcode}_movietimes?date={date}</url>
+      </urls>
+      <inputs>
+          <key id="zipcode" type="xs:string" paramType="path" required="true" />
+          <key id="date" type="xs:string" paramType="path" required="true" />
+      </inputs>
+      <execute>
+        <![CDATA[
+            // This is a pretty fragile scraper for Fandango. Any HTML changes will probably break it.
+        
+            // Request the fandango page with movie times for this zipcode
+            var fandangoUrl = "http://www.fandango.com/" + zipcode + "_movietimes?date=" + date;
+            var resp = y.rest(fandangoUrl)
+                        .accept('text')
+                        .contentType('text/plain')
+                        .forceCharset('iso-8859-1')
+                        .get().response;
+                             
+            // Turn response into a String
+            var respStr = new String(resp);
+    
+            // Get the theater listing HTML
+            var theaterListingIndexStart = respStr.indexOf("<div id=\"theaterListings\">");
+            var theaterListingIndexEnd = respStr.indexOf("<ul class=\"pagination\">");
+            var theaterListingStr = respStr.substring(theaterListingIndexStart, theaterListingIndexEnd);
+            theaterListingStr = theaterListingStr.replace(/\s[^\s]title/g, ' title').replace(/class='wired'/g, 'class="wired"').replace(/class=freeTicketOffer/g, 'class="freeTicketOffer"').replace(/[\n\t]/g, '').replace(/&nbsp;/g, ' ').replace(/&/g, '');
+        
+            // Parse the theater listing HTML into XML
+            var theaterListingXML = new XML(theaterListingStr);
+        
+            // Construct XML response
+            var root = <fandango></fandango>;
+            root.@['src'] = fandangoUrl;
+            response.object = root;
+
+            // Theaters
+            var theaters = theaterListingXML..div.(@['class'] == 'theaterWrapper');
+            for (var i = 0,fragment,theater,moviesNode; i < theaters.length(); i++) {
+            
+                fragment = theaters[i];
+                theater = <theaters></theaters>;
+                
+                theater.node += <id>{fragment..a.(@['id'] == 'theaterlink').text()}</id>;
+                theater.node += <name>{fragment..a.(@['id'] == 'theaterlink').text()}</name>;
+                theater.node += <address>{fragment..div.(@['class'] == 'info')..p..a.text()}</address>;
+                theater.node += <onlinetickets>{String(fragment..div.@['class']).indexOf('nonwired') === -1}</onlinetickets>;
+                
+                // Get data about all the movies playing at this theater
+                var movies = fragment..ul.(@['class'] == 'showtimes').li;
+                for (var j = 0,movie; j < movies.length(); j++) {
+                    
+                    movieFragment = movies[j];
+                    
+                    movie = <movies></movies>;
+                    movie.node += <id>{movieFragment..div.(@['title']).h4.a.text()}</id>;
+                    movie.node += <title>{movieFragment..div.(@['title']).h4.a.text()}</title>;
+                    movie.node += <rating>{String(movieFragment..div.(@['title']).span.text()).replace('(', '').split(')')[0]}</rating>;
+                    movie.node += <runtime>{String(movieFragment..div.(@['title']).span.text()).split(') ')[1]}</runtime>;
+                    
+                    var times = movieFragment..div.(@['times']).ul.li;
+                    for (var k = 0; k < times.length(); k++) {
+                    
+                        time = <times></times>;
+                        if (String(times[k].a.@href)) {
+                            time.node += <clock>{times[k]..span.text()}</clock>;
+                            time.node += <buyURL>{String(times[k].a.@href)}</buyURL>;
+                        }
+                        else {
+                            time.node += <clock>{times[k].text()}</clock>;
+                            time.node += <buyURL></buyURL>;
+                        }
+                        movie.node += time;
+                    }
+                    
+                    theater.node += movie;
+                }
+                
+                root.node += theater;
+            }
+        ]]>
+      </execute>
+    </select>
+  </bindings>
+</table>
