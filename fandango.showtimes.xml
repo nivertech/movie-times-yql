@@ -2,7 +2,7 @@
 <table xmlns="http://query.yahooapis.com/v1/schema/table.xsd">
   <meta>
     <author>Peter Reinhardt</author>
-    <sampleQuery>select * from pterodactyl.movietimes where zipcode="02142"</sampleQuery>
+    <sampleQuery>select * from fandango.movietimes where zipcode="02142"</sampleQuery>
   </meta>
   <bindings>
     <select itemPath="" produces="XML">
